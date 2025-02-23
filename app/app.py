@@ -15,7 +15,7 @@ def lambda_handler(event, _):
     for _ in range(duration):
         sleep(1)
 
-    body = dumps({"duration": time() - start})
+    body = dumps({"duration": round(time() - start, 1)})
 
     s3.put_object(
         Body=body,

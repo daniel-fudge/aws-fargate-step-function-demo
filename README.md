@@ -107,7 +107,33 @@ docker push $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest
 ```
 
 ## 3. Create the Lambda
+### Create the actual Lambda function
+```shell
+aws lambda create-function \
+--function-name $IMAGE_NAME --package-type Image \
+--code ImageUri=$AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest \
+--role arn:aws:iam::${AWS_ACCOUNT_ID}:role/$LAMBDA_ROLE
+```
 
+### Change the timeout
+```shell
+aws lambda update-function-configuration --function-name $IMAGE_NAME --timeout 120
+```
+
+### Test the function
+```shell
+aws lambda invoke --function-name $IMAGE_NAME \
+--payload '{"job_id": 1, "duration": 5, "bucket": "'${BUCKET}'"}' \
+--cli-binary-format raw-in-base64-out response.json
+```
+
+### Update the function
+```shell
+aws lambda update-function-code \
+--function-name $IMAGE_NAME \
+--image-uri $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest \
+--publish
+```
 
 ## 4. Create the Lambda Step Function
 
@@ -138,3 +164,5 @@ aws stepfunctions start-execution \
 - [AWS CLI - Invoke Lambda](https://docs.aws.amazon.com/cli/latest/reference/lambda/invoke.html#examples)
 - [AWS Step Output Filter](https://docs.aws.amazon.com/step-functions/latest/dg/input-output-example.html)
 - [AWS Lambda Runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html)
+- [AWS Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)   
+- [AWS Python Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/python-image.html)    
