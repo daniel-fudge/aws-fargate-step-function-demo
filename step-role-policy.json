@@ -1,0 +1,15 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": ["ecs:RunTask"],
+            "Resource": ["arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:task-definition:IMAGE_NAME"]
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["lambda:InvokeFunction"],
+            "Resource": ["arn:aws:lambda:AWS_REGION:AWS_ACCOUNT_ID:function:IMAGE_NAME:LATEST"]
+        }
+    ]
+}

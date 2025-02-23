@@ -10,6 +10,12 @@ build up to it by completing these steps:
 1. Create a Fargate Task that runs the same container
 1. Create a Step Function that calls the Fargate Task
 
+This simple repo replicates a much more complicated workflow that calls a process that is 
+too large or runs too long (more than 5 mins) for Lambda. Using Lambda first is an 
+excellent way to test the process in a reduced fashion before scalling up to the larger
+process. This same methodology can be applied to much more complex business logic by 
+simply changing the Docker image.
+
 ## 1. Setup the environment
 
 ### Configure the AWS Console
@@ -23,7 +29,7 @@ export BUCKET=[ENTER YOUR BUCKET NAME HERE]
 export AWS_PROFILE=[ENTER YOUR CLI PROFILE NAME HERE]
 export AWS_PAGER=""
 export LAMBDA_ROLE=lambda-execution
-export REGION=us-east-1
+export AWS_REGION=us-east-1
 export STEP_ROLE=step-execution
 export IMAGE_NAME=timer
 export IMAGE_TAG=v1
@@ -34,28 +40,38 @@ Both the Lambda and Step Function execution roles require a trust policy file th
 it to assume the associated service. These `*-trust-policy.json` files are in the root of
 this repo.    
 
-Create the Lambda role and attach the `AWSLambdaBasicExecutionRole` and 
-`AmazonS3FullAccess` policy to the new Lambda role to allow basic execution. Clearly for a 
-production deployment, a more restrictive policy should be attached.
-
+Create the Lambda role and attach the `AWSLambdaBasicExecutionRole`.
 ```shell
 aws iam create-role --role-name $LAMBDA_ROLE \
 --assume-role-policy-document file://lambda-trust-policy.json
 aws iam attach-role-policy --role-name $LAMBDA_ROLE \
 --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-aws iam attach-role-policy --role-name $LAMBDA_ROLE \
---policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
+```
+Attach an inline policy to write to the S3 bucket.
+```shell
+sed "s/BUCKET/${BUCKET}/" lambda-role-policy.json > temp.json
+aws iam put-role-policy --role-name $LAMBDA_ROLE \
+--policy-name timer \
+--policy-document file://temp.json
 ```
 
 ### Create Step Function Role
-Create a Step Function execution role and attached the `AWSLambdaRole` policy to the new 
-Step Function role to allow the step function to invoke Lambda functions. 
+Create the Step Function Role with the required truct policy.
 ```shell
 aws iam create-role --role-name $STEP_ROLE \
 --assume-role-policy-document file://step-trust-policy.json
+```
+Attached the required permissions by making a custom in-line policy.
+```shell
+sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/;s/IMAGE_NAME/${IMAGE_NAME}/" step-role-policy.json > temp.json
+aws iam put-role-policy --role-name $STEP_ROLE \
+--policy-name timer \
+--policy-document file://temp.json
+rm -f temp.json
+```
+
 aws iam attach-role-policy --role-name $STEP_ROLE \
 --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaRole
-```
 
 ### Create S3 bucket
 This will be used to capture output from the Lambda and Fargate Tasks.
@@ -65,7 +81,7 @@ aws s3 mb s3://$BUCKET
 
 ## 2. Create and Publish Container to ECR
 
-## Commands to build image and verifiy that it was built
+### Commands to build image and verifiy that it was built
 ```shell
 docker buildx build --platform linux/amd64 \
 --provenance=false -t ${IMAGE_NAME}:$IMAGE_TAG .
@@ -76,11 +92,6 @@ docker images
 If trying to build mulitple times you may run out of disk space.   
 `docker system df` will show the reclaimable disck space.   
 `docker system prune -a` will delete all docker artifacts.   
-
-## Pushing the image to ECR
-### Configuring AWS CLI
-To push the image to ECR from the CLI you need programmatic access and run `aws configure` 
-or another access method.
 
 ### Authenticate Docker CLI with ECR
 You should see `Login Succeeded` after this command.
@@ -136,26 +147,30 @@ aws lambda update-function-code \
 ```
 
 ## 4. Create the Lambda Step Function
-
-## 5. Create the State Machine (Step Function)
-The step function definition file `step-definition.json` in this repo has placeholders for 
-the AWS account number and region. These are replaced by envirinment variables by a sed 
-command to make a temp file. This temp file is then piped into the CLI command to make the 
-step function.
 ```shell
-sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" step-definition.json > temp.json
-aws stepfunctions create-state-machine --name step-demo \
+sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/;s/IMAGE_NAME/${IMAGE_NAME}/" step-lambda-definition.json > temp.json
+aws stepfunctions create-state-machine --name ${IMAGE_NAME} \
 --definition "$(cat temp.json)" \
 --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/$STEP_ROLE
 rm -f temp.json
 ```
 
-## Invoke the step function
+### Invoke the step function
 The following command invokes the step function.
 ```shell
+sed "s/BUCKET/${BUCKET}/" step-input-lambda.json > temp.json
 aws stepfunctions start-execution \
---state-machine-arn arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:step-demo \
---input '{"ernie": "oh", "bert": "snap"}'
+--state-machine-arn arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:${IMAGE_NAME} \
+--input "$(cat temp.json)"
+rm -f temp.json
+```
+
+The following commands investigates the results sent to S3.
+```shell
+aws s3 cp s3://${BUCKET}/test-1.json .
+aws s3 cp s3://${BUCKET}/test-2.json .
+cat test-1.json
+cat test-2.json
 ```
 
 ## References
