@@ -28,11 +28,12 @@ export AWS_ACCOUNT_ID=[ENTER YOUR AWS ACCOUNT ID HERE]
 export BUCKET=[ENTER YOUR BUCKET NAME HERE]
 export AWS_PROFILE=[ENTER YOUR CLI PROFILE NAME HERE]
 export AWS_PAGER=""
-export LAMBDA_ROLE=lambda-execution
 export AWS_REGION=us-east-1
-export STEP_ROLE=step-execution
 export IMAGE_NAME=timer
 export IMAGE_TAG=v1
+export LAMBDA_ROLE=lambda-execution
+export STEP_ROLE=step-execution
+export TASK_ROLE=task-role
 ```
 
 ### Create Lambda Function Role
@@ -70,8 +71,14 @@ aws iam put-role-policy --role-name $STEP_ROLE \
 rm -f temp.json
 ```
 
-aws iam attach-role-policy --role-name $STEP_ROLE \
---policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+### Create Task Role
+Create the ECS Task Role with the required truct policy and excution policy.
+```shell
+aws iam create-role --role-name $TASK_ROLE \
+--assume-role-policy-document file://task-trust-policy.json
+aws iam attach-role-policy --role-name $TASK_ROLE \
+--policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+```
 
 ### Create S3 bucket
 This will be used to capture output from the Lambda and Fargate Tasks.
@@ -173,6 +180,34 @@ cat test-1.json
 cat test-2.json
 ```
 
+## 5. Create Fargate Task to Run Timer Container
+
+### Create the ECS Cluster
+```shell
+aws ecs create-cluster --cluster-name $IMAGE_NAME
+```
+
+
+https://stackoverflow.com/questions/57613932/pass-arguments-to-python-running-in-docker-container-on-aws-fargate    
+https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html    
+
+
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/getting-started-fargate.html    
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html    
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/example_task_definitions.html    
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_AWSCLI_Fargate.html    
+https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html    
+
+https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ecs/run-task.html    
+
+https://amacal.medium.com/running-python-on-aws-ecs-fargate-89a86093b480    
+https://www.reddit.com/r/aws/comments/y3zj6z/same_docker_image_for_lambda_and_fargate/    
+
+
+
+
+
+
 ## References
 - [AWS CLI - Installation](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2-linux.html)
 - [AWS CLI - Add permissions](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/lambda/add-permission.html)
@@ -181,3 +216,5 @@ cat test-2.json
 - [AWS Lambda Runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html)
 - [AWS Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)   
 - [AWS Python Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/python-image.html)    
+
+
