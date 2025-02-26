@@ -36,6 +36,12 @@ export STEP_ROLE=step-execution
 export TASK_ROLE=task-role
 ```
 
+### Create S3 bucket
+This will be used to capture output from the Lambda and Fargate Tasks.
+```shell
+aws s3 mb s3://$BUCKET 
+```
+
 ### Create Lambda Function Role
 Both the Lambda and Step Function execution roles require a trust policy file that allowes
 it to assume the associated service. These `*-trust-policy.json` files are in the root of
@@ -50,7 +56,7 @@ aws iam attach-role-policy --role-name $LAMBDA_ROLE \
 ```
 Attach an inline policy to write to the S3 bucket.
 ```shell
-sed "s/BUCKET/${BUCKET}/" lambda-role-policy.json > temp.json
+sed "s/BUCKET/${BUCKET}/" s3-write-policy.json > temp.json
 aws iam put-role-policy --role-name $LAMBDA_ROLE \
 --policy-name timer \
 --policy-document file://temp.json
@@ -71,8 +77,8 @@ aws iam put-role-policy --role-name $STEP_ROLE \
 rm -f temp.json
 ```
 
-### Create Task Role
-Create the ECS Task Role with the required truct policy and excution policy.
+### Create Task Exewcution Role
+Create the ECS Task Execution Role with the required truct policy and excution policy.
 ```shell
 aws iam create-role --role-name $TASK_ROLE \
 --assume-role-policy-document file://task-trust-policy.json
@@ -80,10 +86,15 @@ aws iam attach-role-policy --role-name $TASK_ROLE \
 --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 ```
 
-### Create S3 bucket
-This will be used to capture output from the Lambda and Fargate Tasks.
+### Create the Task Role
+See a description of the difference between ECS "Task Execution" and "Task" roles [here](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role).   
+Attach an inline policy to write to the S3 bucket.
 ```shell
-aws s3 mb s3://$BUCKET 
+sed "s/BUCKET/${BUCKET}/" s3-write-policy.json > temp.json
+aws iam put-role-policy --role-name $TASK_ROLE \
+--policy-name timer \
+--policy-document file://temp.json
+rm -f temp.json
 ```
 
 ## 2. Create and Publish Container to ECR

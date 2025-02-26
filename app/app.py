@@ -14,11 +14,7 @@ def timer(job_id: str, duration: int, bucket: str):
 
     body = dumps({"duration": round(time() - start, 1)})
 
-    s3.put_object(
-        Body=body,
-        Bucket=bucket,
-        Key=f'test-{job_id}.json'
-    )
+    s3.put_object(Body=body, Bucket=bucket, Key=f'test-{job_id}.json')
 
     return {'statusCode': 200, 'body': body}
 
@@ -38,9 +34,11 @@ if __name__ == '__main__':
 
     
     parser = argparse.ArgumentParser(description='Simple demo timer function.')
-    parser.add_argument('--job_id', type=str, required=True, help='The job id.')
-    parser.add_argument('--duration', type=int, required=True, help='Duration in seconds.')
-    parser.add_argument('--bucket', type=str, required=True, help='Bucket to write file.')
+    parser.add_argument('-j', '--job_id', type=str, required=True, help='The job id.')
+    parser.add_argument('-d', '--duration', type=int, required=True, help='Duration in seconds.')
+    parser.add_argument('-b', '--bucket', type=str, required=True, help='Bucket to write file.')
     args = vars(parser.parse_args())
 
-    timer(job_id=args.job_id, duration=args.duration, bucket=args.bucket)
+    print(args)
+
+    timer(job_id=args["job_id"], duration=args["duration"], bucket=args["bucket"])
