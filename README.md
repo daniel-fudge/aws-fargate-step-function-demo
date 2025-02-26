@@ -221,7 +221,8 @@ export SECURITY_GROUP=[ENTER YOUR SECURITY GROUP]
 
 aws ecs run-task --cluster $IMAGE_NAME --task-definition $IMAGE_NAME \
 --launch-type "FARGATE" \
---network-configuration "awsvpcConfiguration={subnets=[$SUBNETS], securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}"
+--network-configuration "awsvpcConfiguration={subnets=[$SUBNETS], securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+--overrides '{ "containerOverrides": [{"name": "'$IMAGE_NAME'", "command": ["app.py", "--job_id", "2", "--duration", "2", "--bucket", "'$BUCKET'"]}]}'
 ```
 The following CLI commands may help list the available subnets and security groups. You 
 can also filter by VPC.

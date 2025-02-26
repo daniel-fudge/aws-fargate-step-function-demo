@@ -23,15 +23,6 @@
             ],
             "essential": true,
             "entryPoint": ["python3.13"],
-            "command": [
-                "app.py",
-                "--job_id",
-                "1",
-                "--duration",
-                "3",
-                "--bucket",
-                "BUCKET"
-            ],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
