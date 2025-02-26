@@ -5,12 +5,9 @@ from time import sleep, time
 
 s3 = client('s3')
 
-def lambda_handler(event, _):
 
-    job_id = event["job_id"]
-    duration = event["duration"]
-    bucket = event["bucket"]
-
+# The business logic to be called from either Lambda or Fargate
+def timer(job_id: str, duration: int, bucket: str):
     start = time()
     for _ in range(duration):
         sleep(1)
@@ -23,7 +20,27 @@ def lambda_handler(event, _):
         Key=f'test-{job_id}.json'
     )
 
-    return {
-        'statusCode': 200,
-        'body': body
-    }
+    return {'statusCode': 200, 'body': body}
+
+
+# The normal Lambda handler
+def lambda_handler(event, _):
+    return timer(job_id=event["job_id"], duration=event["duration"], 
+                 bucket=event["bucket"])
+
+
+# This can be used from Fargate by overriding CMD in the Docker image with:
+#    'command': ['app.py', '--job_id', id, '--duration': duration, '--bucket': bucket]
+ 
+if __name__ == '__main__':
+
+    import argparse
+
+    
+    parser = argparse.ArgumentParser(description='Simple demo timer function.')
+    parser.add_argument('--job_id', type=str, required=True, help='The job id.')
+    parser.add_argument('--duration', type=int, required=True, help='Duration in seconds.')
+    parser.add_argument('--bucket', type=str, required=True, help='Bucket to write file.')
+    args = vars(parser.parse_args())
+
+    timer(job_id=args.job_id, duration=args.duration, bucket=args.bucket)
