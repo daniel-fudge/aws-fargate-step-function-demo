@@ -33,6 +33,7 @@ export IMAGE_NAME=timer
 export IMAGE_TAG=v1
 export LAMBDA_ROLE=lambda-execution
 export STEP_ROLE=step-execution
+export TASK_EXEC_ROLE=task-exec-role
 export TASK_ROLE=task-role
 ```
 
@@ -77,17 +78,21 @@ aws iam put-role-policy --role-name $STEP_ROLE \
 rm -f temp.json
 ```
 
-### Create Task Exewcution Role
+### Create Task Execution Role
 Create the ECS Task Execution Role with the required truct policy and excution policy.
 ```shell
-aws iam create-role --role-name $TASK_ROLE \
+aws iam create-role --role-name $TASK_EXEC_ROLE \
 --assume-role-policy-document file://task-trust-policy.json
-aws iam attach-role-policy --role-name $TASK_ROLE \
+aws iam attach-role-policy --role-name $TASK_EXEC_ROLE \
 --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 ```
 
 ### Create the Task Role
-See a description of the difference between ECS "Task Execution" and "Task" roles [here](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role).   
+See a description of the difference between ECS `Task Execution` and `Task` roles [here](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role).   
+```shell
+aws iam create-role --role-name $TASK_ROLE \
+--assume-role-policy-document file://task-trust-policy.json
+```
 Attach an inline policy to write to the S3 bucket.
 ```shell
 sed "s/BUCKET/${BUCKET}/" s3-write-policy.json > temp.json
@@ -198,26 +203,32 @@ cat test-2.json
 aws ecs create-cluster --cluster-name $IMAGE_NAME
 ```
 
+### Create the ECS Task Definition
+```shell
+sed "s/IMAGE_NAME/${IMAGE_NAME}/;s/BUCKET/${BUCKET}/" task-definition.json > temp1.json
+sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" temp1.json > temp2.json
+sed "s/TASK_ROLE/${TASK_ROLE}/;s/TASK_EXEC_ROLE/${TASK_EXEC_ROLE}/" temp2.json > temp.json
+aws ecs register-task-definition --cli-input-json file://temp.json
+rm -f temp*.json
+```
 
-https://stackoverflow.com/questions/57613932/pass-arguments-to-python-running-in-docker-container-on-aws-fargate    
-https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html    
+### Run the ECS Task
+Before running a task you must determine you VPC subnets and security groups and set the 
+appropriate environment variables.
+```shell
+export SUBNETS=[ENTER YOUR SUBNETS SEPARATED WITH A ,]
+export SECURITY_GROUP=[ENTER YOUR SECURITY GROUP]
 
-
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/getting-started-fargate.html    
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html    
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/example_task_definitions.html    
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_AWSCLI_Fargate.html    
-https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html    
-
-https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ecs/run-task.html    
-
-https://amacal.medium.com/running-python-on-aws-ecs-fargate-89a86093b480    
-https://www.reddit.com/r/aws/comments/y3zj6z/same_docker_image_for_lambda_and_fargate/    
-
-
-
-
-
+aws ecs run-task --cluster $IMAGE_NAME --task-definition $IMAGE_NAME \
+--launch-type "FARGATE" \
+--network-configuration "awsvpcConfiguration={subnets=[$SUBNETS], securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}"
+```
+The following CLI commands may help list the available subnets and security groups. You 
+can also filter by VPC.
+```shell
+aws ec2 describe-subnets --query "Subnets[*].SubnetId"
+aws ec2 describe-security-groups --query "SecurityGroups[*].[GroupId]"
+```
 
 ## References
 - [AWS CLI - Installation](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2-linux.html)
@@ -227,5 +238,8 @@ https://www.reddit.com/r/aws/comments/y3zj6z/same_docker_image_for_lambda_and_fa
 - [AWS Lambda Runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html)
 - [AWS Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)   
 - [AWS Python Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/python-image.html)    
-
-
+- [ECS Task vs Task Execution Role](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role)    
+- [AWS Fargate with Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html)    
+- [AWS ECS Task Definition Parameters](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html)    
+- [AWS Example ECS Task Definitions](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/example_task_definitions.html)    
+- [AWS Create ECS Task with CLI](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_AWSCLI_Fargate.html)    
