@@ -2,6 +2,7 @@
 temp*.json
 response.json
 test*.json
+scratch.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
