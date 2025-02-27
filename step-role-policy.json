@@ -1,17 +1,17 @@
 {
     "Version": "2012-10-17",
     "Statement": [
-		{
-			"Effect": "Allow",
-			"Action": "iam:PassRole",
-			"Resource": ["*"],
-			"Condition": {"StringLike": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}}
-		},
         {
             "Effect": "Allow",
             "Action": ["lambda:InvokeFunction"],
             "Resource": ["arn:aws:lambda:AWS_REGION:AWS_ACCOUNT_ID:function:IMAGE_NAME:*"]
         },
+		{
+			"Effect": "Allow",
+			"Action": "iam:PassRole",
+			"Resource": ["*"],
+			"Condition": {"StringLike": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}}
+		},        
         {
             "Effect": "Allow",
             "Action": ["ecs:RunTask"],
@@ -21,6 +21,11 @@
             "Effect": "Allow",
             "Action": ["ecs:StopTask", "ecs:DescribeTasks"],
             "Resource": ["arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:task/IMAGE_NAME/*"]
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["events:PutTargets", "events:PutRule", "events:DescribeRule"],
+            "Resource": ["arn:aws:events:AWS_REGION:AWS_ACCOUNT_ID:rule/StepFunctionsGetEventsForECSTaskRule"]
         }
     ]
 }
