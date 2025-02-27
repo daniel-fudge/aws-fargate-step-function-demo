@@ -172,7 +172,7 @@ aws lambda update-function-code \
 ## 4. Create the Lambda Step Function
 ```shell
 sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/;s/IMAGE_NAME/${IMAGE_NAME}/" step-lambda-definition.json > temp.json
-aws stepfunctions create-state-machine --name ${IMAGE_NAME} \
+aws stepfunctions create-state-machine --name ${IMAGE_NAME}-lambda \
 --definition "$(cat temp.json)" \
 --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/$STEP_ROLE
 rm -f temp.json
@@ -183,7 +183,7 @@ The following command invokes the step function.
 ```shell
 sed "s/BUCKET/${BUCKET}/" step-input-lambda.json > temp.json
 aws stepfunctions start-execution \
---state-machine-arn arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:${IMAGE_NAME} \
+--state-machine-arn arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:${IMAGE_NAME}-lambda \
 --input "$(cat temp.json)"
 rm -f temp.json
 ```
@@ -218,17 +218,46 @@ appropriate environment variables.
 ```shell
 export SUBNETS=[ENTER YOUR SUBNETS SEPARATED WITH A ,]
 export SECURITY_GROUP=[ENTER YOUR SECURITY GROUP]
+```
+Note the single and double quotes in the example below.
+```shell
+export SUBNETS='"subnet-1","subnet-2"'
+export SECURITY_GROUP=sg-1
+```
 
+```shell
+sed "s/SECURITY_GROUP/${SECURITY_GROUP}/;s/SUBNETS/${SUBNETS}/" network-configuration-cli.json > temp.json
 aws ecs run-task --cluster $IMAGE_NAME --task-definition $IMAGE_NAME \
---launch-type "FARGATE" \
---network-configuration "awsvpcConfiguration={subnets=[$SUBNETS], securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+--launch-type "FARGATE" --network-configuration file://temp.json \
 --overrides '{ "containerOverrides": [{"name": "'$IMAGE_NAME'", "command": ["app.py", "--job_id", "2", "--duration", "2", "--bucket", "'$BUCKET'"]}]}'
+rm temp.json
 ```
 The following CLI commands may help list the available subnets and security groups. You 
 can also filter by VPC.
 ```shell
 aws ec2 describe-subnets --query "Subnets[*].SubnetId"
 aws ec2 describe-security-groups --query "SecurityGroups[*].[GroupId]"
+```
+
+## 6. Create the Fargate Step Function
+```shell
+sed "s/AWS_REGION/${AWS_REGION}/" step-fargate-definition.json > temp1.json
+sed "s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" temp1.json > temp2.json
+sed "s/IMAGE_NAME/${IMAGE_NAME}/" temp2.json > temp3.json
+sed "s/SECURITY_GROUP/${SECURITY_GROUP}/;s/SUBNETS/${SUBNETS}/" temp3.json > temp.json
+aws stepfunctions create-state-machine --name ${IMAGE_NAME}-fargate \
+--definition "$(cat temp.json)" \
+--role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/$STEP_ROLE
+rm -f temp*.json
+```
+
+### Invoke the step function
+```shell
+sed "s/BUCKET/${BUCKET}/" step-input-fargate.json > temp.json
+aws stepfunctions start-execution \
+--state-machine-arn arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:${IMAGE_NAME}-fargate \
+--input "$(cat temp.json)"
+rm -f temp.json
 ```
 
 ## References
@@ -240,7 +269,7 @@ aws ec2 describe-security-groups --query "SecurityGroups[*].[GroupId]"
 - [AWS Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)   
 - [AWS Python Container Lambda](https://docs.aws.amazon.com/lambda/latest/dg/python-image.html)    
 - [ECS Task vs Task Execution Role](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role)    
-- [AWS Fargate with Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html)    
 - [AWS ECS Task Definition Parameters](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html)    
 - [AWS Example ECS Task Definitions](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/example_task_definitions.html)    
 - [AWS Create ECS Task with CLI](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_AWSCLI_Fargate.html)    
+- [AWS Fargate with Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html)    

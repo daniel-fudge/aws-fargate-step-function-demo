@@ -1,6 +1,6 @@
 {
   "QueryLanguage": "JSONPath",
-  "Comment": "A delayed batch of Fargate timers",
+  "Comment": "A delayed batch of Lmabda timers",
   "StartAt": "Timer-Batch",
   "States": {
     "Timer-Batch": {

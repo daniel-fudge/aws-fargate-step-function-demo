@@ -1,15 +1,26 @@
 {
     "Version": "2012-10-17",
     "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": ["ecs:RunTask"],
-            "Resource": ["arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:task-definition:IMAGE_NAME"]
-        },
+		{
+			"Effect": "Allow",
+			"Action": "iam:PassRole",
+			"Resource": ["*"],
+			"Condition": {"StringLike": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}}
+		},
         {
             "Effect": "Allow",
             "Action": ["lambda:InvokeFunction"],
-            "Resource": ["arn:aws:lambda:AWS_REGION:AWS_ACCOUNT_ID:function:IMAGE_NAME:LATEST"]
+            "Resource": ["arn:aws:lambda:AWS_REGION:AWS_ACCOUNT_ID:function:IMAGE_NAME:*"]
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["ecs:RunTask"],
+            "Resource": ["arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:task-definition/IMAGE_NAME:*"]
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["ecs:StopTask", "ecs:DescribeTasks"],
+            "Resource": ["arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:task/IMAGE_NAME/*"]
         }
     ]
 }

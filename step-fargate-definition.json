@@ -1,0 +1,42 @@
+{
+  "QueryLanguage": "JSONPath",
+  "Comment": "A delayed batch of Fargate timers",
+  "StartAt": "Timer-Batch",
+  "States": {
+    "Timer-Batch": {
+      "Type": "Map",
+      "End": true,
+      "ItemsPath": "$.timer_info",
+      "ItemProcessor": {
+        "ProcessorConfig": {"Mode": "INLINE"},
+        "StartAt": "Wait",
+        "States": {
+          "Wait": {
+            "Type": "Wait",
+            "SecondsPath": "$.delay",
+            "Next": "Timer-Fargate"},
+          "Timer-Fargate": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::ecs:runTask.sync",
+            "End": true,
+            "Parameters": {
+              "LaunchType": "FARGATE",
+              "Cluster": "arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:cluster/IMAGE_NAME",
+              "TaskDefinition": "arn:aws:ecs:AWS_REGION:AWS_ACCOUNT_ID:task-definition/IMAGE_NAME",
+              "NetworkConfiguration": {
+                "AwsvpcConfiguration": {
+                  "Subnets": [SUBNETS],
+                  "SecurityGroups": ["SECURITY_GROUP"],
+                  "AssignPublicIp": "ENABLED"}},
+              "Overrides": {
+                "ContainerOverrides": [{
+                  "Name": "IMAGE_NAME",
+                  "Command.$": "$.commands"}]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
