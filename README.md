@@ -1,6 +1,6 @@
 # aws-fargate-step-funtion-demo
 Small repo that creates an AWS Step Function to call Fargate tasks.    
-
+![image](Lambda-Fargate-Step-Function.png)
 The end state of this demo is a Step Function that calls a Fargate Task. However we will 
 build up to it by completing these steps:
 1. Setup the environment
