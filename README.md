@@ -61,6 +61,7 @@ sed "s/BUCKET/${BUCKET}/" s3-write-policy.json > temp.json
 aws iam put-role-policy --role-name $LAMBDA_ROLE \
 --policy-name timer \
 --policy-document file://temp.json
+rm -f temp.json
 ```
 
 ### Create Step Function Role
@@ -71,11 +72,13 @@ aws iam create-role --role-name $STEP_ROLE \
 ```
 Attached the required permissions by making a custom in-line policy.
 ```shell
-sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/;s/IMAGE_NAME/${IMAGE_NAME}/" step-role-policy.json > temp.json
+sed "s/AWS_REGION/${AWS_REGION}/" step-role-policy.json > temp1.json
+sed "s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" temp1.json > temp2.json
+sed "s/IMAGE_NAME/${IMAGE_NAME}/" temp2.json > temp.json
 aws iam put-role-policy --role-name $STEP_ROLE \
 --policy-name timer \
 --policy-document file://temp.json
-rm -f temp.json
+rm -f temp*.json
 ```
 
 ### Create Task Execution Role
@@ -86,9 +89,19 @@ aws iam create-role --role-name $TASK_EXEC_ROLE \
 aws iam attach-role-policy --role-name $TASK_EXEC_ROLE \
 --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 ```
+Allow the task execution role to create the log group if it doesn't exist.
+```shell
+sed "s/IMAGE_NAME/${IMAGE_NAME}/" task-exec-policy.json > temp1.json
+sed "s/AWS_REGION/${AWS_REGION}/" temp1.json > temp2.json
+sed "s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" temp2.json > temp.json
+aws iam put-role-policy --role-name $TASK_EXEC_ROLE \
+--policy-name timer --policy-document file://temp.json
+rm -f temp*.json
+```
 
 ### Create the Task Role
-See a description of the difference between ECS `Task Execution` and `Task` roles [here](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role).   
+See a description of the difference between ECS `Task Execution` and `Task` roles 
+[here](https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role).   
 ```shell
 aws iam create-role --role-name $TASK_ROLE \
 --assume-role-policy-document file://task-trust-policy.json
@@ -97,8 +110,7 @@ Attach an inline policy to write to the S3 bucket.
 ```shell
 sed "s/BUCKET/${BUCKET}/" s3-write-policy.json > temp.json
 aws iam put-role-policy --role-name $TASK_ROLE \
---policy-name timer \
---policy-document file://temp.json
+--policy-name timer --policy-document file://temp.json
 rm -f temp.json
 ```
 
@@ -106,8 +118,7 @@ rm -f temp.json
 
 ### Commands to build image and verifiy that it was built
 ```shell
-docker buildx build --platform linux/amd64 \
---provenance=false -t ${IMAGE_NAME}:$IMAGE_TAG .
+docker buildx build --platform linux/amd64 --provenance=false -t ${IMAGE_NAME}:$IMAGE_TAG .
 docker images 
 ```
 
@@ -119,25 +130,25 @@ If trying to build mulitple times you may run out of disk space.
 ### Authenticate Docker CLI with ECR
 You should see `Login Succeeded` after this command.
 ```shell
-aws ecr get-login-password --region $REGION | docker login --username AWS \
---password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS \
+--password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 ```
 
 ### Create an ECR repository
 Note you only have to do this once. You may also simply use an existing repo.
 ```shell
-aws ecr create-repository --repository-name $IMAGE_NAME --region $REGION \
+aws ecr create-repository --repository-name $IMAGE_NAME --region $AWS_REGION \
 --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
 ```
 
 ### Give the image the `latest` tag
 ```shell
-docker tag ${IMAGE_NAME}:${IMAGE_TAG} $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest
+docker tag ${IMAGE_NAME}:${IMAGE_TAG} $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${IMAGE_NAME}:latest
 ```
 
 ### Deploy Docker image to ECR
 ```shell 
-docker push $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest
+docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${IMAGE_NAME}:latest
 ```
 
 ## 3. Create the Lambda
@@ -145,7 +156,7 @@ docker push $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest
 ```shell
 aws lambda create-function \
 --function-name $IMAGE_NAME --package-type Image \
---code ImageUri=$AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest \
+--code ImageUri=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${IMAGE_NAME}:latest \
 --role arn:aws:iam::${AWS_ACCOUNT_ID}:role/$LAMBDA_ROLE
 ```
 
@@ -163,19 +174,20 @@ aws lambda invoke --function-name $IMAGE_NAME \
 
 ### Update the function
 ```shell
-aws lambda update-function-code \
---function-name $IMAGE_NAME \
---image-uri $AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${IMAGE_NAME}:latest \
+aws lambda update-function-code --function-name $IMAGE_NAME \
+--image-uri $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${IMAGE_NAME}:latest \
 --publish
 ```
 
 ## 4. Create the Lambda Step Function
 ```shell
-sed "s/AWS_REGION/${AWS_REGION}/;s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/;s/IMAGE_NAME/${IMAGE_NAME}/" step-lambda-definition.json > temp.json
+sed "s/AWS_REGION/${AWS_REGION}/" step-lambda-definition.json > temp1.json
+sed "s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" temp1.json > temp2.json
+sed "s/IMAGE_NAME/${IMAGE_NAME}/" temp2.json > temp.json
 aws stepfunctions create-state-machine --name ${IMAGE_NAME}-lambda \
 --definition "$(cat temp.json)" \
 --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/$STEP_ROLE
-rm -f temp.json
+rm -f temp*.json
 ```
 
 ### Invoke the step function
