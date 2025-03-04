@@ -35,6 +35,9 @@ export LAMBDA_ROLE=lambda-execution
 export STEP_ROLE=step-execution
 export TASK_EXEC_ROLE=task-exec-role
 export TASK_ROLE=task-role
+export CIDR_VPC=10.0.0.0/16
+export CIDR_SUBNET1=10.0.0.0/24
+export CIDR_SUBNET2=10.0.1.0/24
 ```
 
 ### Create S3 bucket
@@ -208,7 +211,81 @@ cat test-1.json
 cat test-2.json
 ```
 
-## 5. Create Fargate Task to Run Timer Container
+## 5. Make a VPC to run Tasks
+The tasks require VPC Subnets to run in. To interact with S3 and the Step Function 
+services they also require access to the internet, hense an Internet Gateway.
+
+### Create a new VPC
+```shell
+aws ec2 create-vpc --cidr-block $CIDR_VPC
+```
+From the output save the VPC ID as an environment variable for later use. 
+```shell
+export VPC=[YOUR VPCID]
+```
+Set DNS Support and DNS Hostnames attributes to true.
+```shell
+aws ec2 modify-vpc-attribute --vpc-id $VPC --enable-dns-support
+aws ec2 modify-vpc-attribute --vpc-id $VPC --enable-dns-hostnames
+```
+Extract the Security Group ID.
+```shell
+aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC \
+--query "SecurityGroups[*].[GroupId]"
+```
+Save it as an environment variable.
+```shell
+export SECURITY_GROUP=sg-1
+```
+Extract the Route Table ID.
+```shell
+aws ec2 describe-route-tables --filters Name=vpc-id,Values=$VPC \
+--query "RouteTables[*].[RouteTableId]"
+```
+Save it as an environment variable.
+```shell
+export RTB=rtb-xxx
+```
+
+### Create to public subnets
+```shell
+aws ec2 create-subnet --vpc-id $VPC --cidr-block $CIDR_SUBNET1 \
+--availability-zone ${AWS_REGION}a
+aws ec2 create-subnet --vpc-id $VPC --cidr-block $CIDR_SUBNET2 \
+--availability-zone ${AWS_REGION}b
+```
+From the output save the Subnet IDs. Note the single and double quotes below.
+```shell
+export SUBNET1=subnet-1
+export SUBNET2=subnet-2
+export SUBNETS='"'${SUBNET1}'", "'${SUBNET2}'"'
+```
+Modify the subnets to map the public IP on launch.
+```shell
+aws ec2 modify-subnet-attribute --subnet-id $SUBNET1 --map-public-ip-on-launch
+aws ec2 modify-subnet-attribute --subnet-id $SUBNET1 --map-public-ip-on-launch
+```
+
+### Create and attach an Internet Gateway
+```shell
+aws ec2 create-internet-gateway
+```
+From the output save the Internet Gateway ID as an environment variable for later use. 
+```shell
+export IGW=igw-xxx
+```
+Attach it to the VPC.
+```shell
+aws ec2 attach-internet-gateway --internet-gateway-id $IGW --vpc-id $VPC
+```
+
+### Create a route to the Internet Gateway
+```shell
+aws ec2 create-route --route-table-id $RTB --destination-cidr-block 0.0.0.0/0 \
+--gateway-id $IGW
+``` 
+
+## 6. Create Fargate Task to Run Timer Container
 
 ### Create the ECS Cluster
 ```shell
@@ -225,18 +302,6 @@ rm -f temp*.json
 ```
 
 ### Run the ECS Task
-Before running a task you must determine you VPC subnets and security groups and set the 
-appropriate environment variables.
-```shell
-export SUBNETS=[ENTER YOUR SUBNETS SEPARATED WITH A ,]
-export SECURITY_GROUP=[ENTER YOUR SECURITY GROUP]
-```
-Note the single and double quotes in the example below.
-```shell
-export SUBNETS='"subnet-1","subnet-2"'
-export SECURITY_GROUP=sg-1
-```
-
 ```shell
 sed "s/SECURITY_GROUP/${SECURITY_GROUP}/;s/SUBNETS/${SUBNETS}/" network-configuration-cli.json > temp.json
 aws ecs run-task --cluster $IMAGE_NAME --task-definition $IMAGE_NAME \
@@ -244,14 +309,8 @@ aws ecs run-task --cluster $IMAGE_NAME --task-definition $IMAGE_NAME \
 --overrides '{ "containerOverrides": [{"name": "'$IMAGE_NAME'", "command": ["app.py", "--job_id", "2", "--duration", "2", "--bucket", "'$BUCKET'"]}]}'
 rm temp.json
 ```
-The following CLI commands may help list the available subnets and security groups. You 
-can also filter by VPC.
-```shell
-aws ec2 describe-subnets --query "Subnets[*].SubnetId"
-aws ec2 describe-security-groups --query "SecurityGroups[*].[GroupId]"
-```
 
-## 6. Create the Fargate Step Function
+## 7. Create the Fargate Step Function
 ```shell
 sed "s/AWS_REGION/${AWS_REGION}/" step-fargate-definition.json > temp1.json
 sed "s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/" temp1.json > temp2.json
